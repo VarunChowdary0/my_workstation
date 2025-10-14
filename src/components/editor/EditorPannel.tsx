@@ -1,7 +1,7 @@
 "use client";
 import { Editor } from "@monaco-editor/react";
 import TabsBar from "./TabsBar";
-import { FileNode } from "@/mock-data/projectFiles";
+import { FileNode } from "@/types/types";
 import { BugIcon } from "lucide-react";
 
 interface EditorPanelProps {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileNode } from "@/mock-data/projectFiles";
+import { FileNode } from "@/types/types";
 import {
   Folder,
   FolderOpen,
@@ -34,9 +34,9 @@ export default function FileTree({
 }: FileTreeProps) {
   return (
     <ul className="ml-2">
-      {nodes.map((node) => (
+      {nodes.map((node,idx) => (
         <FileNodeItem
-          key={node.name}
+          key={node.name+`-${idx}`}
           node={node}
           onSelect={onSelect}
           onFileDragStart={onFileDragStart}
@@ -62,7 +62,8 @@ function FileNodeItem({
   path: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const isFolder = !!node.children?.length;
+  // Treat as folder only when children is an array (null means file)
+  const isFolder = Array.isArray(node.children);
 
   const getFileIcon = (name: string) => {
     const ext = name.split(".").pop()?.toLowerCase() || "";
@@ -143,7 +144,7 @@ function FileNodeItem({
         )}
         <span className="select-none">{node.name}</span>
       </div>
-      {isFolder && isOpen && node.children && (
+      {isFolder && isOpen && Array.isArray(node.children) && node.children.length > 0 && (
         <FileTree
           nodes={node.children}
           onSelect={onSelect}

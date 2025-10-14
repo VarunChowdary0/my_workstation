@@ -5,9 +5,8 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { MOCK_PROJECT_REACT } from "@/mock-data/projectFiles";
 import {
   PlayIcon,
   PlusIcon,
@@ -20,11 +19,15 @@ import EditorPanel from "@/components/editor/EditorPannel";
 import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/store/projectStore";
 import { FileNode } from "@/types/types";
+import { useProjectFiles } from "@/contexts/ProjectFilesContext";
 
 type EditorFile = { path: string; node: FileNode };
 
-export default function ProjectDemo() {
-  const terminalRef = useRef<HTMLDivElement>(null);
+interface ProjectViewProps {
+  FILES: FileNode[];
+}
+const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
+   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -62,7 +65,7 @@ export default function ProjectDemo() {
 
   useEffect(() => {
     if (projectFiles.length === 0) {
-      setFiles(MOCK_PROJECT_REACT);
+      setFiles(FILES);
     }
   }, [projectFiles, setFiles]);
 
@@ -212,7 +215,7 @@ export default function ProjectDemo() {
       : "right");
 
   return (
-    <div className="h-screen w-screen dark:bg-[#181818]">
+    <div className="h-[calc(100vh-35px)] w-screen dark:bg-[#181818]">
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         {showLeft && (
           <>
@@ -365,5 +368,14 @@ export default function ProjectDemo() {
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
+  );
+}
+
+export default function Page() {
+  const files = useProjectFiles();
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
+      <ProjectView FILES={files} />
+    </Suspense>
   );
 }

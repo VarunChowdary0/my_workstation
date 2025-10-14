@@ -3,16 +3,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Sparkles, User, Send, RotateCcw, MessageSquare, Code, FileText, Zap, Copy, Check, XIcon } from "lucide-react";
+import { Sparkles, User, Send, RotateCcw, Code, FileText, Zap, Copy, Check, XIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useProjectStore } from "@/store/projectStore";
+import { allServices } from "@/services/allServices";
+import { Messaage } from "@/types/types";
 
 interface currProps{
   onClose: ()=> void;
-}
-interface Message {
-  role: "user" | "assistant";
-  content: string;
 }
 
 const CodeBlock = ({ language, children }: { language?: string; children: string }) => {
@@ -45,15 +44,17 @@ const CodeBlock = ({ language, children }: { language?: string; children: string
 };
 
 const SideChat:React.FC<currProps> = ({onClose}) => {
-  const [messages, setMessages] = useState<Message[]>([
-    { 
-      role: "assistant", 
-      content: "Hi! I'm GitHub Copilot. I can help you write code, answer questions, and explain concepts. What would you like to work on?" 
-    },
-  ]);
-
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const {
+    chatMessages,
+    addChatMessage,
+    clearChat,
+    isTyping,
+    setTyping,
+    aiModelId,
+    aiModelConfig,
+    openedFiles,
+  } = useProjectStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,46 +63,64 @@ const SideChat:React.FC<currProps> = ({onClose}) => {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    // Seed greeting once
+    if (chatMessages.length === 0) {
+      addChatMessage({ role: "assistant", content: "Hi! I'm GitHub Copilot. I can help you write code, answer questions, and explain concepts. What would you like to work on?" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const sendMessage = () => {
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages, isTyping]);
+
+  const sendMessage = async () => {
     if (!input.trim()) return;
     
-    const userMessage = input;
-    setMessages([...messages, { role: "user", content: userMessage }]);
+    const userMessage = input.trim();
+    addChatMessage({ role: "user", content: userMessage, timestamp: new Date().toISOString() });
     setInput("");
-    setIsTyping(true);
-
-    // Simulate AI response with different examples
-    setTimeout(() => {
-      let response = "";
+    setTyping(true);
+    try {
+      const history:Messaage[] = chatMessages.map(({ role, content }) => ({ role, content }));
       
-      if (userMessage.toLowerCase().includes("javascript") || userMessage.toLowerCase().includes("js")) {
-        response = "Here's a JavaScript example:\n\n```javascript\n// Print to console\nconsole.log('Hello, World!');\n\n// Variables\nconst name = 'GitHub Copilot';\nlet count = 0;\n\n// Function\nfunction greet(user) {\n  return `Hello, ${user}!`;\n}\n```\n\nWould you like me to explain any of these concepts?";
-      } else if (userMessage.toLowerCase().includes("react")) {
-        response = "Here's a simple React component:\n\n```tsx\nimport { useState } from 'react';\n\nfunction Counter() {\n  const [count, setCount] = useState(0);\n\n  return (\n    <div>\n      <p>Count: {count}</p>\n      <button onClick={() => setCount(count + 1)}>\n        Increment\n      </button>\n    </div>\n  );\n}\n\nexport default Counter;\n```\n\nThis component uses the `useState` hook to manage state.";
-      } else if (userMessage.toLowerCase().includes("python")) {
-        response = "Here's a Python example:\n\n```python\n# Print statement\nprint('Hello, World!')\n\n# List comprehension\nnumbers = [x**2 for x in range(10)]\n\n# Function\ndef greet(name):\n    return f'Hello, {name}!'\n\n# Class\nclass Person:\n    def __init__(self, name):\n        self.name = name\n```";
-      } else {
-        response = `I can help with that! Here are some things I can do:\n\n- **Write code** in multiple languages\n- **Explain** programming concepts\n- **Debug** and fix issues\n- **Suggest** best practices\n- **Refactor** existing code\n\nWhat specific task would you like help with?`;
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response },
-      ]);
-      setIsTyping(false);
-    }, 1200);
+      // Debug: Log opened files
+      console.log("Opened files:", openedFiles);
+      
+      // Collect all opened files content as strings
+      const openedFilesContent: string[] = openedFiles.map((file) => {
+        const fileExtension = file.path.split('.').pop() || '';
+        return `// File: ${file.path} (${fileExtension})\n${file.node.content || '// No content'}`;
+      });
+      
+      // Convert to single string
+      const allFilesString = openedFilesContent.join('\n\n---\n\n');
+      
+      // Debug: Log the files string being sent
+      console.log("Files string length:", allFilesString.length);
+      console.log("Files string preview:", allFilesString.substring(0, 200));
+      
+      const data = await allServices.assist(
+        userMessage,
+        allFilesString, // Send all opened files content
+        "", // language - we'll let the API figure it out from file extensions
+        "code",
+        aiModelId || "gpt-4o-mini",
+        aiModelConfig || { model: "gpt-4o-mini", temperature: 0.4, maxTokens: 2048, systemMessage: "You are a helpful coding assistant." },
+        history
+      );
+      const reply: string = data?.message || data?.content || (typeof data === 'string' ? data : JSON.stringify(data));
+      addChatMessage({ role: "assistant", content: reply, timestamp: new Date().toISOString() });
+    } catch (e: any) {
+      addChatMessage({ role: "assistant", content: `Sorry, I hit an error: ${e?.message || e}`, timestamp: new Date().toISOString() });
+    } finally {
+      setTyping(false);
+    }
   };
 
-  const clearChat = () => {
-    setMessages([
-      { 
-        role: "assistant", 
-        content: "Hi! I'm GitHub Copilot. I can help you write code, answer questions, and explain concepts. What would you like to work on?" 
-      },
-    ]);
+  const onClearChat = () => {
+    clearChat();
+    addChatMessage({ role: "assistant", content: "Hi! I'm GitHub Copilot. I can help you write code, answer questions, and explain concepts. What would you like to work on?" });
   };
 
   const quickPrompts = [
@@ -111,18 +130,23 @@ const SideChat:React.FC<currProps> = ({onClose}) => {
   ];
 
   return (
-    <div className="h-screen  flex flex-col">
+    <div className="h-full flex flex-col">
       {/* Header */}
       <div className=" border-b px-4 py-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-purple-400" />
           <span className="font-semibold text-[#cccccc] text-sm">Copilot Chat</span>
+          {openedFiles.length > 0 && (
+            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
+              {openedFiles.length} file{openedFiles.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
         <div>
           <Button
             variant="ghost"
             size="icon"
-            onClick={clearChat}
+            onClick={onClearChat}
             className="h-7 w-7 text-[#cccccc] hover:bg-[#3e3e42]"
           >
             <RotateCcw size={14} />
@@ -139,8 +163,8 @@ const SideChat:React.FC<currProps> = ({onClose}) => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto  px-4 py-3 space-y-4">
-        {messages.map((msg, idx) => (
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-4">
+        {chatMessages.map((msg, idx) => (
           <div
             key={idx}
             className={`flex gap-3 ${msg.role === "user" ? "items-start" : "items-start"}`}
@@ -169,9 +193,10 @@ const SideChat:React.FC<currProps> = ({onClose}) => {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    code({ node, inline, className, children, ...props }) {
+                    code({ node, className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || "");
                       const code = String(children).replace(/\n$/, "");
+                      const inline = !match;
                       
                       return !inline && match ? (
                         <CodeBlock language={match[1]}>
@@ -228,7 +253,7 @@ const SideChat:React.FC<currProps> = ({onClose}) => {
       </div>
 
       {/* Quick prompts */}
-      {messages.length === 1 && (
+  {chatMessages.length <= 1 && (
         <div className="px-4 pb-3 flex gap-2 flex-wrap">
           {quickPrompts.map((prompt, idx) => (
             <Button

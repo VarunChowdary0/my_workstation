@@ -1,49 +1,32 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Editor from "@monaco-editor/react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// Dynamically import components to avoid SSR issues
+const Editor = dynamic(() => import("@monaco-editor/react"), { 
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full bg-gray-800 text-white">Loading editor...</div>
+});
+
+const Terminal = dynamic(() => import("@/components/Terminal"), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-40 bg-gray-900 text-white">Loading terminal...</div>
+});
+
 export default function WorkstationDemo() {
   const [code, setCode] = useState("// Write your code here\nconsole.log('Hello World')");
   const [aiResponse, setAiResponse] = useState<string>("");
 
-  // Terminal refs
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-
-  useEffect(() => {
-    if (terminalRef.current && !xtermRef.current) {
-      // Create Terminal and FitAddon
-      const term = new Terminal({ rows: 10, cols: 60 });
-      const fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(terminalRef.current);
-      fitAddon.fit();
-      term.writeln("Mock Terminal Started...");
-      
-      // Save references
-      xtermRef.current = term;
-      fitAddonRef.current = fitAddon;
-
-      // Resize terminal on window resize
-      const handleResize = () => fitAddon.fit();
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }
-  }, []);
-
   const runCode = () => {
-    if (xtermRef.current) {
-      xtermRef.current.writeln(`$ node demo.js`);
-      xtermRef.current.writeln(`Hello World 🌍`);
+    // Write to terminal using global function
+    if (typeof window !== "undefined" && (window as any).writeToTerminal) {
+      (window as any).writeToTerminal(`$ node demo.js`);
+      (window as any).writeToTerminal(`Hello World 🌍`);
     }
     setAiResponse("✅ Looks good! Maybe try adding a loop?");
   };
@@ -71,7 +54,7 @@ export default function WorkstationDemo() {
         {/* Terminal */}
         <Card>
           <CardContent className="p-2">
-            <div ref={terminalRef} className="h-40 w-full" />
+            <Terminal />
           </CardContent>
         </Card>
 

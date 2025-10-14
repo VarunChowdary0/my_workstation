@@ -1,11 +1,5 @@
-export interface FileNode {
-  name: string;
-  content?: string;
-  isEditable?: boolean;
-  children?: FileNode[]; // if it's a folder
-}
+import { FileNode } from "@/types/types";
 
-// Example mock project
 export const MOCK_PROJECT_0: FileNode[] = [
   {
     name: "src",

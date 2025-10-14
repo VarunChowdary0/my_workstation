@@ -3,13 +3,13 @@ import { TextIcon, XIcon } from "lucide-react";
 import clsx from "clsx";
 // *** REMOVED: No longer needs its own state ***
 // import { useState } from "react"; 
-import type { FileNode } from "@/mock-data/projectFiles";
 import TechStackIcon from "tech-stack-icons";
 import JavascriptIcon from "../icons/JavascriptIcon";
 import ScalaIcon from "../icons/ScalaIcon";
 import PerlIcon from "../icons/PerlIcon";
 import FortranIcon from "../icons/FortranIcon";
 import MatLabIcon from "../icons/MatLabIcon";
+import { FileNode } from "@/types/types";
 
 interface TabsBarProps {
   openFiles: { path: string; node: FileNode }[];
