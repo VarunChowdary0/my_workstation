@@ -3,6 +3,8 @@ import { Editor } from "@monaco-editor/react";
 import TabsBar from "./TabsBar";
 import { FileNode } from "@/types/types";
 import { BugIcon } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface EditorPanelProps {
   panelId: "left" | "right";
@@ -78,25 +80,29 @@ export default function EditorPanel({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       />
-      <div className="flex-1 bg-[#1e1e1e]">
+      <div className="flex-1 bg-[#1e1e1e] overflow-hidden">
         {activeFile ? (
-          <Editor
-            height="100%"
-            // Use path as key to force re-render when file changes
-            key={activeFile.path} 
-            defaultLanguage={getFileLanguage(activeFile.node.name)}
-            // The value is now directly from the file node content
-            value={activeFile.node.content} 
-            onChange={(val) => {
-              // *** CHANGED: Call the onContentChange prop ***
-              // This sends the change to the Zustand store
-              if (val !== undefined && activeFile.node.isEditable) {
-                onContentChange(activeFile.path, val);
-              }
-            }}
-            options={{ readOnly: !activeFile.node.isEditable }}
-            theme="vs-dark"
-          />
+          activeFile.node.name.endsWith(".md") ? (
+            <div className="h-full overflow-auto p-6 prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {activeFile.node.content || ""}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              key={activeFile.path}
+              defaultLanguage={getFileLanguage(activeFile.node.name)}
+              value={activeFile.node.content}
+              onChange={(val) => {
+                if (val !== undefined && activeFile.node.isEditable) {
+                  onContentChange(activeFile.path, val);
+                }
+              }}
+              options={{ readOnly: !activeFile.node.isEditable }}
+              theme="vs-dark"
+            />
+          )
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <BugIcon size={96} className="opacity-30" />

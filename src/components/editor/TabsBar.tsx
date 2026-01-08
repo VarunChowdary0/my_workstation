@@ -1,5 +1,5 @@
 "use client";
-import { TextIcon, XIcon } from "lucide-react";
+import { TextIcon, XIcon, Lock } from "lucide-react";
 import clsx from "clsx";
 // *** REMOVED: No longer needs its own state ***
 // import { useState } from "react"; 
@@ -110,6 +110,9 @@ export default function TabsBar({
         >
           <span className=" w-4">{getFileIcon(f.node.name)}</span>
           {f.node.name}
+          {f.node.isEditable === false && (
+            <Lock size={12} className="text-gray-500 ml-1" />
+          )}
           <XIcon
             size={16}
             className="ml-1 hover:text-red-400"

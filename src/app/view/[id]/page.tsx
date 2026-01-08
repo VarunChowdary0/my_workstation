@@ -19,15 +19,20 @@ import EditorPanel from "@/components/editor/EditorPannel";
 import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/store/projectStore";
 import { FileNode } from "@/types/types";
-import { useProjectFiles } from "@/contexts/ProjectFilesContext";
+import { useProjectFiles, useProject } from "@/contexts/ProjectFilesContext";
+import WebPreview from "@/components/preview/WebPreview";
+import PreviewPopup from "@/components/preview/PreviewPopup";
+import { buildSimpleWebHtml } from "@/utils/simpleWebBuilder";
 
 type EditorFile = { path: string; node: FileNode };
 
 interface ProjectViewProps {
   FILES: FileNode[];
+  framework?: string;
+  entrypoint?: string;
 }
-const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
-   const terminalRef = useRef<HTMLDivElement>(null);
+const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint }) => {
+  const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -39,11 +44,12 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
     setOpenedFiles,
     addOpenedFile,
     removeOpenedFile,
+    showCopilot,
+    setShowCopilot,
   } = useProjectStore();
 
   // UI Visibility State
   const [showLeft, setShowLeft] = useState(true);
-  const [showRight, setShowRight] = useState(true);
   const [showTerminal, setShowTerminal] = useState(true);
   const [isSplitView, setIsSplitView] = useState(false);
 
@@ -59,6 +65,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
   const [showDropOverlay, setShowDropOverlay] = useState(false);
   const [draggingTabPath, setDraggingTabPath] = useState<string | null>(null);
 
+  // Preview State
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -68,6 +79,23 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
       setFiles(FILES);
     }
   }, [projectFiles, setFiles]);
+
+  // Auto-open first .md file from root folder
+  useEffect(() => {
+    if (projectFiles.length > 0 && leftOpenFiles.length === 0) {
+      const rootMdFiles = projectFiles
+        .filter((node) => !node.children && node.name.endsWith(".md"))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      if (rootMdFiles.length > 0) {
+        const firstMd = rootMdFiles[0];
+        const file: EditorFile = { path: firstMd.name, node: firstMd };
+        setLeftOpenFiles([file]);
+        setLeftActive(file);
+        addOpenedFile(file);
+      }
+    }
+  }, [projectFiles]);
 
   // Sync opened files with store
   useEffect(() => {
@@ -107,14 +135,14 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "b") { e.preventDefault(); setShowRight((p) => !p); } 
-      else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); setShowLeft((p) => !p); } 
-      else if (e.ctrlKey && e.key === "`") { e.preventDefault(); setShowTerminal((p) => !p); } 
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "b") { e.preventDefault(); setShowCopilot(!showCopilot); }
+      else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "b") { e.preventDefault(); setShowLeft((p) => !p); }
+      else if (e.ctrlKey && e.key === "`") { e.preventDefault(); setShowTerminal((p) => !p); }
       else if (e.ctrlKey && e.key === "\\") { e.preventDefault(); setIsSplitView((p) => !p); }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [showCopilot, setShowCopilot]);
 
   // --- *** FIXED: Central handler for content changes *** ---
   const handleContentChange = (path: string, content: string) => {
@@ -206,7 +234,38 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
     }
   };
   
-  const runCode = () => { if (xtermRef.current) xtermRef.current.writeln(`$ Running active file...`); };
+  const runCode = () => {
+    if (xtermRef.current) {
+      xtermRef.current.writeln(`$ Running project...`);
+    }
+
+    // For simple-web framework, build combined HTML and show preview
+    if (framework === "simple-web") {
+      const html = buildSimpleWebHtml(projectFiles, entrypoint);
+      setPreviewHtml(html);
+      setShowPreview(true);
+      if (xtermRef.current) {
+        xtermRef.current.writeln(`✓ Built successfully. Opening preview...`);
+      }
+    }
+  };
+
+  // Auto-rebuild preview HTML when files change (for live preview)
+  useEffect(() => {
+    if (showPreview && framework === "simple-web") {
+      const html = buildSimpleWebHtml(projectFiles, entrypoint);
+      setPreviewHtml(html);
+    }
+  }, [projectFiles, showPreview, framework, entrypoint]);
+
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewFullscreen(false);
+  };
+
+  const handleToggleFullscreen = () => {
+    setPreviewFullscreen((prev) => !prev);
+  };
 
   const dragSourcePanel =
     draggingTabPath &&
@@ -243,9 +302,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
           </>
         )}
 
-        <ResizablePanel defaultSize={showLeft && showRight ? 60 : 80}>
+        <ResizablePanel defaultSize={showLeft && showCopilot ? 60 : 80}>
           <ResizablePanelGroup direction="horizontal">
-            <ResizablePanel defaultSize={showRight ? 70 : 100} minSize={50}>
+            <ResizablePanel defaultSize={showCopilot ? 70 : 100} minSize={50}>
               <ResizablePanelGroup direction="vertical">
                 <ResizablePanel defaultSize={showTerminal ? 75 : 100}>
                   <ResizablePanelGroup
@@ -331,6 +390,21 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
                         }}
                       />
                     )}
+
+                    {/* Preview Panel (inline, not fullscreen) */}
+                    {showPreview && !previewFullscreen && (
+                      <>
+                        <ResizableHandle withHandle />
+                        <ResizablePanel defaultSize={40} minSize={20}>
+                          <WebPreview
+                            htmlContent={previewHtml}
+                            onClose={handleClosePreview}
+                            onToggleFullscreen={handleToggleFullscreen}
+                            isFullscreen={false}
+                          />
+                        </ResizablePanel>
+                      </>
+                    )}
                   </ResizablePanelGroup>
                 </ResizablePanel>
 
@@ -356,26 +430,36 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES }) => {
               </ResizablePanelGroup>
             </ResizablePanel>
 
-            {showRight && (
+            {showCopilot && (
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={30} minSize={20}>
-                  <SideChat onClose={()=>setShowRight(false)}/>
+                  <SideChat onClose={()=>setShowCopilot(false)}/>
                 </ResizablePanel>
               </>
             )}
           </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      {/* Fullscreen Preview Popup */}
+      {showPreview && previewFullscreen && (
+        <PreviewPopup htmlContent={previewHtml} onClose={handleClosePreview} />
+      )}
     </div>
   );
 }
 
 export default function Page() {
   const files = useProjectFiles();
+  const project = useProject();
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
-      <ProjectView FILES={files} />
+      <ProjectView
+        FILES={files}
+        framework={project?.metadata?.framework}
+        entrypoint={project?.metadata?.entrypoint}
+      />
     </Suspense>
   );
 }

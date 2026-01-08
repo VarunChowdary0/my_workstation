@@ -6,6 +6,7 @@ import {
   Folder,
   FolderOpen,
   TextIcon,
+  Lock,
 } from "lucide-react";
 import clsx from "clsx";
 import OpenIcon from "../icons/OpenIcon";
@@ -23,6 +24,7 @@ interface FileTreeProps {
   onFileDragStart: (node: FileNode, path:string) => void;
   onFileDragEnd: () => void;
   currentPath?: string;
+  depth?: number;
 }
 
 export default function FileTree({
@@ -31,19 +33,30 @@ export default function FileTree({
   onFileDragStart,
   onFileDragEnd,
   currentPath = "",
+  depth = 0,
 }: FileTreeProps) {
+  // Track folder index at current level
+  let folderIndex = 0;
+
   return (
     <ul className="ml-2">
-      {nodes.map((node,idx) => (
-        <FileNodeItem
-          key={node.name+`-${idx}`}
-          node={node}
-          onSelect={onSelect}
-          onFileDragStart={onFileDragStart}
-          onFileDragEnd={onFileDragEnd}
-          path={currentPath ? `${currentPath}/${node.name}` : node.name}
-        />
-      ))}
+      {nodes.map((node, idx) => {
+        const isFolder = Array.isArray(node.children);
+        const currentFolderIndex = isFolder ? folderIndex++ : -1;
+
+        return (
+          <FileNodeItem
+            key={node.name + `-${idx}`}
+            node={node}
+            onSelect={onSelect}
+            onFileDragStart={onFileDragStart}
+            onFileDragEnd={onFileDragEnd}
+            path={currentPath ? `${currentPath}/${node.name}` : node.name}
+            depth={depth}
+            folderIndex={currentFolderIndex}
+          />
+        );
+      })}
     </ul>
   );
 }
@@ -54,14 +67,20 @@ function FileNodeItem({
   path,
   onFileDragStart,
   onFileDragEnd,
+  depth,
+  folderIndex,
 }: {
   node: FileNode;
   onSelect: (node: FileNode, path: string) => void;
   onFileDragStart: (node: FileNode, path:string) => void;
   onFileDragEnd: () => void;
   path: string;
+  depth: number;
+  folderIndex: number;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  // Auto-expand first 2 folders at root level (depth 0)
+  const shouldAutoExpand = depth === 0 && folderIndex >= 0 && folderIndex < 2;
+  const [isOpen, setIsOpen] = useState(shouldAutoExpand);
   // Treat as folder only when children is an array (null means file)
   const isFolder = Array.isArray(node.children);
 
@@ -142,7 +161,10 @@ function FileNodeItem({
             {getFileIcon(node.name)}
           </span>
         )}
-        <span className="select-none">{node.name}</span>
+        <span className="select-none flex-1">{node.name}</span>
+        {!isFolder && node.isEditable === false && (
+          <Lock size={12} className="text-gray-500 ml-auto" />
+        )}
       </div>
       {isFolder && isOpen && Array.isArray(node.children) && node.children.length > 0 && (
         <FileTree
@@ -151,6 +173,7 @@ function FileNodeItem({
           currentPath={path}
           onFileDragStart={onFileDragStart}
           onFileDragEnd={onFileDragEnd}
+          depth={depth + 1}
         />
       )}
     </li>

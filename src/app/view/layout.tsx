@@ -5,7 +5,8 @@ import { Project } from "@/types/types";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
-import { ProjectFilesContext } from "@/contexts/ProjectFilesContext";
+import { ProjectFilesContext, ProjectContext } from "@/contexts/ProjectFilesContext";
+import { Sparkles } from "lucide-react";
 
 export default function Layout({
     children,
@@ -19,6 +20,7 @@ export default function Layout({
     const fecthProject = async (pid: string) => {
         try{
             const response = await allServices.getProject(pid);
+            console.log(response)
             setProject(response);
         }
         catch(error){
@@ -32,16 +34,18 @@ export default function Layout({
     },[project_id]);
         const files = useMemo(() => project?.files ?? [], [project]);
         return (
-            <ProjectFilesContext.Provider value={files}>
-                <AiMetaBar />
-                {children}
-            </ProjectFilesContext.Provider>
+            <ProjectContext.Provider value={project}>
+                <ProjectFilesContext.Provider value={files}>
+                    <AiMetaBar />
+                    {children}
+                </ProjectFilesContext.Provider>
+            </ProjectContext.Provider>
         );
 }
 
 function AiMetaBar() {
-    const { aiModelId, aiModelConfig } = useProjectStore();
-    
+    const { aiModelId, aiModelConfig, showCopilot, toggleCopilot } = useProjectStore();
+
     const model = aiModelId || "gpt-4o-mini";
     const temperature = (aiModelConfig?.temperature as number) ?? 0.4;
     const maxTokens = aiModelConfig?.maxTokens ?? 2048;
@@ -66,6 +70,18 @@ function AiMetaBar() {
                 <span className="font-mono text-foreground truncate max-w-48" title={systemMessage}>
                     {systemMessage}
                 </span>
+            </div>
+            <div className="ml-auto">
+                {!showCopilot && (
+                    <button
+                        onClick={toggleCopilot}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        title="Open Copilot Chat (Ctrl+Alt+B)"
+                    >
+                        <Sparkles size={14} className="text-purple-400" />
+                        <span>Copilot</span>
+                    </button>
+                )}
             </div>
         </div>
     );

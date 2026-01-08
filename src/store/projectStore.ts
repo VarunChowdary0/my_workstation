@@ -15,6 +15,8 @@ export interface ProjectState {
   aiModelConfig?: ModelConfig | null;
   // Opened files tracking
   openedFiles: Array<{ path: string; node: FileNode }>;
+  // UI visibility
+  showCopilot: boolean;
   // --- ACTIONS ---
   setFiles: (files: FileNode[]) => void;
   updateFileContent: (path: string, newContent: string) => void;
@@ -27,6 +29,8 @@ export interface ProjectState {
   setOpenedFiles: (files: Array<{ path: string; node: FileNode }>) => void;
   addOpenedFile: (file: { path: string; node: FileNode }) => void;
   removeOpenedFile: (path: string) => void;
+  setShowCopilot: (show: boolean) => void;
+  toggleCopilot: () => void;
 }
 
 // This type remains the same for the persisted part of the state
@@ -74,6 +78,7 @@ export const useProjectStore = create<ProjectState>()(
       aiModelId: undefined,
       aiModelConfig: null,
       openedFiles: [],
+      showCopilot: true,
 
       // --- ACTIONS IMPLEMENTATION ---
 
@@ -122,13 +127,17 @@ export const useProjectStore = create<ProjectState>()(
       // --- OPENED FILES ACTIONS ---
       setOpenedFiles: (files) => set({ openedFiles: files }),
       addOpenedFile: (file) => set((state) => ({
-        openedFiles: state.openedFiles.some(f => f.path === file.path) 
-          ? state.openedFiles 
+        openedFiles: state.openedFiles.some(f => f.path === file.path)
+          ? state.openedFiles
           : [...state.openedFiles, file]
       })),
       removeOpenedFile: (path) => set((state) => ({
         openedFiles: state.openedFiles.filter(f => f.path !== path)
       })),
+
+      // --- UI VISIBILITY ACTIONS ---
+      setShowCopilot: (show) => set({ showCopilot: show }),
+      toggleCopilot: () => set((state) => ({ showCopilot: !state.showCopilot })),
     }),
     {
       name: 'project-state-store',
