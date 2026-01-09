@@ -35,12 +35,21 @@ export default function FileTree({
   currentPath = "",
   depth = 0,
 }: FileTreeProps) {
+  // Sort nodes: folders first, then files (alphabetically within each group)
+  const sortedNodes = [...nodes].sort((a, b) => {
+    const aIsFolder = Array.isArray(a.children);
+    const bIsFolder = Array.isArray(b.children);
+    if (aIsFolder && !bIsFolder) return -1;
+    if (!aIsFolder && bIsFolder) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   // Track folder index at current level
   let folderIndex = 0;
 
   return (
     <ul className="ml-2">
-      {nodes.map((node, idx) => {
+      {sortedNodes.map((node, idx) => {
         const isFolder = Array.isArray(node.children);
         const currentFolderIndex = isFolder ? folderIndex++ : -1;
 

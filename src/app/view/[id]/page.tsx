@@ -22,7 +22,10 @@ import { FileNode } from "@/types/types";
 import { useProjectFiles, useProject } from "@/contexts/ProjectFilesContext";
 import WebPreview from "@/components/preview/WebPreview";
 import PreviewPopup from "@/components/preview/PreviewPopup";
+import BrowserPreview from "@/components/preview/BrowserPreview";
 import { buildSimpleWebHtml } from "@/utils/simpleWebBuilder";
+import { allServices } from "@/services/allServices";
+import { SquareIcon, Loader2Icon, CopyIcon, CheckIcon, GlobeIcon } from "lucide-react";
 
 type EditorFile = { path: string; node: FileNode };
 
@@ -33,14 +36,12 @@ interface ProjectViewProps {
 }
 const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<any>(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const [terminalLines, setTerminalLines] = useState<string[]>([]);
 
   const {
     files: projectFiles,
     setFiles,
     updateFileContent,
-    appendToTerminal,
     setOpenedFiles,
     addOpenedFile,
     removeOpenedFile,
@@ -70,15 +71,30 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  // Code Execution State
+  const [isRunning, setIsRunning] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [terminalCopied, setTerminalCopied] = useState(false);
 
+  // Browser Preview State (for dev servers)
+  const [devServerPort, setDevServerPort] = useState<number | null>(null);
+  const [showBrowserPreview, setShowBrowserPreview] = useState(false);
+  const [browserPreviewFullscreen, setBrowserPreviewFullscreen] = useState(false);
+
+  // Always sync FILES from context to store when FILES changes
+  // Also reset opened files to prevent stale tabs from previous project
   useEffect(() => {
-    if (projectFiles.length === 0) {
+    if (FILES.length > 0) {
       setFiles(FILES);
+      // Clear opened files when project files change
+      setLeftOpenFiles([]);
+      setRightOpenFiles([]);
+      setLeftActive(null);
+      setRightActive(null);
+      setOpenedFiles([]);
     }
-  }, [projectFiles, setFiles]);
+  }, [FILES, setFiles, setOpenedFiles]);
 
   // Auto-open first .md file from root folder
   useEffect(() => {
@@ -106,32 +122,23 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
     setOpenedFiles(uniqueOpenFiles);
   }, [leftOpenFiles, rightOpenFiles, setOpenedFiles]);
   
+  // Auto-scroll terminal to bottom when new lines are added
   useEffect(() => {
-    if (isMounted && terminalRef.current && !xtermRef.current) {
-      const initTerminal = async () => {
-        try {
-          const { Terminal } = await import("@xterm/xterm");
-          const { FitAddon } = await import("@xterm/addon-fit");
-          
-          const term = new Terminal({ theme: { background: "#1e1e1e" } });
-          const fitAddon = new FitAddon();
-          term.loadAddon(fitAddon);
-          term.open(terminalRef.current!);
-          fitAddon.fit();
-          term.writeln("✓ Compiled successfully");
-          appendToTerminal("✓ Compiled successfully");
-          xtermRef.current = term;
-          const onResize = () => fitAddon.fit();
-          window.addEventListener("resize", onResize);
-          return () => window.removeEventListener("resize", onResize);
-        } catch (error) {
-          console.error("Failed to initialize terminal:", error);
-        }
-      };
-      
-      initTerminal();
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
-  }, [isMounted, appendToTerminal]);
+  }, [terminalLines]);
+
+  // Helper to write to terminal
+  const writeToTerminal = (text: string) => {
+    // Split by actual newlines and filter empty strings at the end
+    const lines = text.split(/\r?\n/);
+    setTerminalLines(prev => [...prev, ...lines.filter((l, i) => i < lines.length - 1 || l !== '')]);
+  };
+
+  const writelnToTerminal = (text: string) => {
+    setTerminalLines(prev => [...prev, text]);
+  };
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -144,6 +151,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
     return () => window.removeEventListener("keydown", handleKey);
   }, [showCopilot, setShowCopilot]);
 
+  // Debounce ref for live sync
+  const syncDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // --- *** FIXED: Central handler for content changes *** ---
   const handleContentChange = (path: string, content: string) => {
     // 1. Update the global Zustand store
@@ -151,8 +161,8 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
 
     // 2. Update the local UI state for any open tabs of the same file
     const updateNodeInPlace = (files: EditorFile[]) => {
-      return files.map(file => 
-        file.path === path 
+      return files.map(file =>
+        file.path === path
           ? { ...file, node: { ...file.node, content: content } }
           : file
       );
@@ -166,6 +176,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
     }
     if (rightActive?.path === path) {
       setRightActive(prev => prev ? { ...prev, node: { ...prev.node, content } } : null);
+    }
+
+    // 4. Live sync: If a dev server is running, sync the file to the backend (debounced)
+    if (sessionId && isRunning) {
+      if (syncDebounceRef.current) {
+        clearTimeout(syncDebounceRef.current);
+      }
+      syncDebounceRef.current = setTimeout(() => {
+        allServices.updateFile(sessionId, path, content).catch((err) => {
+          console.error("[LiveSync] Failed to update file:", err);
+        });
+      }, 300); // 300ms debounce
     }
   };
 
@@ -233,22 +255,191 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
       openFileInPanel(panel, draggedExplorerFile);
     }
   };
-  
-  const runCode = () => {
-    if (xtermRef.current) {
-      xtermRef.current.writeln(`$ Running project...`);
+
+  // Stream output from execution server
+  const streamOutput = async (sid: string, signal: AbortSignal) => {
+    try {
+      console.log(`[Stream] Connecting to session ${sid}...`);
+
+      const streamResponse = await fetch(
+        `http://localhost:8001/api/projects/stream/${sid}`,
+        {
+          signal,
+          headers: {
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          }
+        }
+      );
+
+      console.log(`[Stream] Response status: ${streamResponse.status}`);
+
+      if (!streamResponse.ok || !streamResponse.body) {
+        throw new Error(`Failed to connect: ${streamResponse.status}`);
+      }
+
+      console.log(`[Stream] Connected, starting to read...`);
+
+      const reader = streamResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+
+            if (data === "[CONNECTED]") continue;
+
+            if (data === "[END]") {
+              setIsRunning(false);
+              abortControllerRef.current = null;
+              return;
+            }
+
+            if (data === "[TIMEOUT]") {
+              writelnToTerminal("⚠ Execution timed out");
+              setIsRunning(false);
+              abortControllerRef.current = null;
+              return;
+            }
+
+            // Unescape newlines and write to terminal
+            const unescaped = data.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+            writeToTerminal(unescaped);
+
+            // Auto-show browser preview when dev server is ready
+            // Common indicators for various frameworks
+            const lowerData = unescaped.toLowerCase();
+            if (
+              (lowerData.includes("ready") && lowerData.includes("localhost")) ||
+              lowerData.includes("local:") ||
+              lowerData.includes("started server") ||
+              (lowerData.includes("compiled") && lowerData.includes("success")) ||
+              lowerData.includes("➜  local:") ||
+              // Uvicorn indicators
+              lowerData.includes("uvicorn running on") ||
+              lowerData.includes("application startup complete") ||
+              // Flask indicators
+              (lowerData.includes("running on") && lowerData.includes("http://"))
+            ) {
+              setShowBrowserPreview(true);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error("[Stream] Error:", error.name, error.message, error);
+
+      if (error.name !== "AbortError") {
+        writelnToTerminal(`✗ Stream error: ${error.message}`);
+      } else {
+        console.log("[Stream] Aborted by user");
+      }
+    } finally {
+      console.log("[Stream] Cleanup");
+      setIsRunning(false);
+      abortControllerRef.current = null;
     }
+  };
+
+  const runCode = async () => {
+    // Clear terminal first
+    setTerminalLines([]);
+    writelnToTerminal("$ Running project...");
 
     // For simple-web framework, build combined HTML and show preview
     if (framework === "simple-web") {
       const html = buildSimpleWebHtml(projectFiles, entrypoint);
       setPreviewHtml(html);
       setShowPreview(true);
-      if (xtermRef.current) {
-        xtermRef.current.writeln(`✓ Built successfully. Opening preview...`);
-      }
+      writelnToTerminal("✓ Built successfully. Opening preview...");
+      return;
+    }
+
+    // For other frameworks, use backend execution
+    try {
+      setIsRunning(true);
+
+      // Call backend to start execution
+      const response = await allServices.runProject(projectFiles);
+      setSessionId(response.session_id);
+      setDevServerPort(response.port);
+
+      writelnToTerminal(`Detected: ${response.project_type}`);
+      writelnToTerminal(`Server port: ${response.port}`);
+      writelnToTerminal("");
+
+      // Connect to SSE stream for output using fetch
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      // Small delay to ensure session is fully ready on backend
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Start streaming in a separate async function
+      streamOutput(response.session_id, abortController.signal);
+
+    } catch (error) {
+      console.error("Run project error:", error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      writelnToTerminal(`✗ Error: ${errMsg}`);
+      setIsRunning(false);
     }
   };
+
+  const stopCode = async () => {
+    if (sessionId) {
+      try {
+        await allServices.stopProject(sessionId);
+        writelnToTerminal("⚠ Process stopped by user");
+      } catch (error) {
+        console.error("Failed to stop process:", error);
+      }
+    }
+
+    // Abort the fetch stream
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    setIsRunning(false);
+    setSessionId(null);
+    setDevServerPort(null);
+    setShowBrowserPreview(false);
+    setBrowserPreviewFullscreen(false);
+  };
+
+  const clearTerminal = () => {
+    setTerminalLines([]);
+  };
+
+  const copyTerminalOutput = async () => {
+    const text = terminalLines.join("\n");
+    if (text) {
+      await navigator.clipboard.writeText(text);
+      setTerminalCopied(true);
+      setTimeout(() => setTerminalCopied(false), 2000);
+    }
+  };
+
+  // Cleanup on unmount only
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Auto-rebuild preview HTML when files change (for live preview)
   useEffect(() => {
@@ -267,6 +458,15 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
     setPreviewFullscreen((prev) => !prev);
   };
 
+  const handleCloseBrowserPreview = () => {
+    setShowBrowserPreview(false);
+    setBrowserPreviewFullscreen(false);
+  };
+
+  const handleToggleBrowserFullscreen = () => {
+    setBrowserPreviewFullscreen((prev) => !prev);
+  };
+
   const dragSourcePanel =
     draggingTabPath &&
     (leftOpenFiles.some((f) => f.path === draggingTabPath)
@@ -274,7 +474,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
       : "right");
 
   return (
-    <div className="h-[calc(100vh-35px)] w-screen dark:bg-[#181818]">
+    <div className="h-[calc(100vh-38px)] w-screen dark:bg-[#181818]">
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         {showLeft && (
           <>
@@ -391,7 +591,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                       />
                     )}
 
-                    {/* Preview Panel (inline, not fullscreen) */}
+                    {/* Preview Panel for simple-web (inline, not fullscreen) */}
                     {showPreview && !previewFullscreen && (
                       <>
                         <ResizableHandle withHandle />
@@ -400,6 +600,21 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                             htmlContent={previewHtml}
                             onClose={handleClosePreview}
                             onToggleFullscreen={handleToggleFullscreen}
+                            isFullscreen={false}
+                          />
+                        </ResizablePanel>
+                      </>
+                    )}
+
+                    {/* Browser Preview Panel for dev servers (inline, not fullscreen) */}
+                    {showBrowserPreview && devServerPort && !browserPreviewFullscreen && (
+                      <>
+                        <ResizableHandle withHandle />
+                        <ResizablePanel defaultSize={40} minSize={20}>
+                          <BrowserPreview
+                            url={`http://localhost:${devServerPort}`}
+                            onClose={handleCloseBrowserPreview}
+                            onToggleFullscreen={handleToggleBrowserFullscreen}
                             isFullscreen={false}
                           />
                         </ResizablePanel>
@@ -415,14 +630,51 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                       {/* ... Terminal JSX ... */}
                       <div className="h-full flex flex-col bg-[#1e1e1e] border-t">
                         <div className="flex items-center justify-between px-2 py-1 border-b text-sm">
-                          <div className="flex items-center gap-2"><TerminalSquareIcon size={16} /><span>Terminal</span></div>
                           <div className="flex items-center gap-2">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={runCode}><PlayIcon size={14} /></Button>
+                            <TerminalSquareIcon size={16} />
+                            <span>Terminal</span>
+                            {isRunning && <Loader2Icon size={14} className="animate-spin text-green-500" />}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isRunning ? (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-400" onClick={stopCode} title="Stop">
+                                <SquareIcon size={14} />
+                              </Button>
+                            ) : (
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={runCode} title="Run">
+                                <PlayIcon size={14} />
+                              </Button>
+                            )}
+                            {devServerPort && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className={`h-7 w-7 ${showBrowserPreview ? "text-blue-400" : ""}`}
+                                onClick={() => setShowBrowserPreview(!showBrowserPreview)}
+                                title={showBrowserPreview ? "Hide Browser Preview" : "Show Browser Preview"}
+                              >
+                                <GlobeIcon size={14} />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={copyTerminalOutput} title="Copy output">
+                              {terminalCopied ? <CheckIcon size={14} className="text-green-500" /> : <CopyIcon size={14} />}
+                            </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7"><PlusIcon size={14} /></Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7"><Trash2Icon size={14} /></Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={clearTerminal} title="Clear">
+                              <Trash2Icon size={14} />
+                            </Button>
                           </div>
                         </div>
-                        <div ref={terminalRef} className="flex-1 w-full overflow-auto p-1"/>
+                        <div
+                          ref={terminalRef}
+                          className="flex-1 w-full overflow-auto p-2 font-mono text-xs leading-tight"
+                        >
+                          {terminalLines.map((line, idx) => (
+                            <div key={idx} className="whitespace-pre-wrap break-all text-gray-300">
+                              {line || "\u00A0"}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </ResizablePanel>
                   </>
@@ -445,6 +697,18 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
       {/* Fullscreen Preview Popup */}
       {showPreview && previewFullscreen && (
         <PreviewPopup htmlContent={previewHtml} onClose={handleClosePreview} />
+      )}
+
+      {/* Fullscreen Browser Preview */}
+      {showBrowserPreview && browserPreviewFullscreen && devServerPort && (
+        <div className="fixed inset-0 z-50 bg-black">
+          <BrowserPreview
+            url={`http://localhost:${devServerPort}`}
+            onClose={handleCloseBrowserPreview}
+            onToggleFullscreen={handleToggleBrowserFullscreen}
+            isFullscreen={true}
+          />
+        </div>
       )}
     </div>
   );

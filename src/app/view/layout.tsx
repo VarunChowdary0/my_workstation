@@ -6,41 +6,88 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { ProjectFilesContext, ProjectContext } from "@/contexts/ProjectFilesContext";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 
 export default function Layout({
     children,
-}: { 
-    children: React.ReactNode;  
+}: {
+    children: React.ReactNode;
 }) {
     const params = useParams();
     const project_id = params.id as string;
     const [project, setProject] = useState<Project>();
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const fecthProject = async (pid: string) => {
-        try{
+        setIsLoading(true);
+        setError(null);
+        try {
             const response = await allServices.getProject(pid);
-            console.log(response)
+            console.log(response);
             setProject(response);
-        }
-        catch(error){
+        } catch (error) {
             console.error("Failed to fetch project:", error);
+            setError("Failed to load project");
+        } finally {
+            setIsLoading(false);
         }
-    }
+    };
+
     useEffect(() => {
-        if(project_id){
+        if (project_id) {
             fecthProject(project_id);
         }
-    },[project_id]);
-        const files = useMemo(() => project?.files ?? [], [project]);
-        return (
-            <ProjectContext.Provider value={project}>
-                <ProjectFilesContext.Provider value={files}>
-                    <AiMetaBar />
-                    {children}
-                </ProjectFilesContext.Provider>
-            </ProjectContext.Provider>
-        );
+    }, [project_id]);
+
+    const files = useMemo(() => project?.files ?? [], [project]);
+
+    if (isLoading) {
+        return <LoadingScreen />;
+    }
+
+    if (error) {
+        return <ErrorScreen message={error} />;
+    }
+
+    return (
+        <ProjectContext.Provider value={project}>
+            <ProjectFilesContext.Provider value={files}>
+                <AiMetaBar />
+                {children}
+            </ProjectFilesContext.Provider>
+        </ProjectContext.Provider>
+    );
+}
+
+function LoadingScreen() {
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#181818]">
+            <div className="flex flex-col items-center gap-4">
+                <Loader2 size={48} className="text-blue-500 animate-spin" />
+                <p className="text-gray-400 text-sm">Loading project...</p>
+            </div>
+        </div>
+    );
+}
+
+function ErrorScreen({ message }: { message: string }) {
+    return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#181818]">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <span className="text-red-500 text-2xl">!</span>
+                </div>
+                <p className="text-gray-400 text-sm">{message}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+        </div>
+    );
 }
 
 function AiMetaBar() {
@@ -75,7 +122,7 @@ function AiMetaBar() {
                 {!showCopilot && (
                     <button
                         onClick={toggleCopilot}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                         title="Open Copilot Chat (Ctrl+Alt+B)"
                     >
                         <Sparkles size={14} className="text-purple-400" />
