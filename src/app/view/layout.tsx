@@ -7,6 +7,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useProjectStore } from "@/store/projectStore";
 import { ProjectFilesContext, ProjectContext } from "@/contexts/ProjectFilesContext";
 import { Sparkles, Loader2 } from "lucide-react";
+import { NOTEBOOK_DEMO_PROJECT } from "@/mock-data/notebookDemo";
+
+// Map of mock project IDs to their data
+const MOCK_PROJECTS: Record<string, Project> = {
+    "notebook_demo": NOTEBOOK_DEMO_PROJECT,
+};
 
 export default function Layout({
     children,
@@ -23,6 +29,12 @@ export default function Layout({
         setIsLoading(true);
         setError(null);
         try {
+            // Check if this is a mock project first
+            if (MOCK_PROJECTS[pid]) {
+                setProject(MOCK_PROJECTS[pid]);
+                return;
+            }
+            // Otherwise fetch from API
             const response = await allServices.getProject(pid);
             console.log(response);
             setProject(response);

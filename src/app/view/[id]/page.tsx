@@ -5,7 +5,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   PlayIcon,
@@ -81,6 +81,23 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showBrowserPreview, setShowBrowserPreview] = useState(false);
   const [browserPreviewFullscreen, setBrowserPreviewFullscreen] = useState(false);
+
+  // Find requirements.txt content for notebook package installation
+  const requirementsTxt = useMemo(() => {
+    const findRequirements = (files: FileNode[]): string | undefined => {
+      for (const file of files) {
+        if (file.name === 'requirements.txt' && file.content) {
+          return file.content;
+        }
+        if (file.children) {
+          const found = findRequirements(file.children);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    return findRequirements(projectFiles);
+  }, [projectFiles]);
 
   // Always sync FILES from context to store when FILES changes
   // Also reset opened files to prevent stale tabs from previous project
@@ -530,6 +547,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                           onDragStart={setDraggingTabPath}
                           onDragEnd={() => setDraggingTabPath(null)}
                           onContentChange={handleContentChange}
+                          requirementsTxt={requirementsTxt}
                         />
                         {dragSourcePanel === "right" && (
                           <div
@@ -565,6 +583,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                               onDragStart={setDraggingTabPath}
                               onDragEnd={() => setDraggingTabPath(null)}
                               onContentChange={handleContentChange}
+                              requirementsTxt={requirementsTxt}
                             />
                             {dragSourcePanel === "left" && (
                               <div

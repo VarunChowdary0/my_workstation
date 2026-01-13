@@ -5,6 +5,7 @@ import { FileNode } from "@/types/types";
 import { BugIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import NotebookEditor from "./NotebookEditor";
 
 interface EditorPanelProps {
   panelId: "left" | "right";
@@ -19,6 +20,8 @@ interface EditorPanelProps {
   onDragEnd: () => void;
   // *** NEW: Add prop to notify parent of content changes ***
   onContentChange: (path: string, content: string) => void;
+  // requirements.txt content for notebook package installation
+  requirementsTxt?: string;
 }
 
 const getFileLanguage = (name: string) => {
@@ -64,7 +67,8 @@ export default function EditorPanel({
   draggingPath,
   onDragStart,
   onDragEnd,
-  onContentChange, // Destructure the new prop
+  onContentChange,
+  requirementsTxt,
 }: EditorPanelProps) {
   return (
     <div className="flex flex-col h-full w-full">
@@ -82,13 +86,23 @@ export default function EditorPanel({
       />
       <div className="flex-1 bg-[#1e1e1e] overflow-hidden">
         {activeFile ? (
-          activeFile.node.name.endsWith(".md") ? (
+          activeFile.node.name.endsWith(".ipynb") ? (
+            // Jupyter Notebook
+            <NotebookEditor
+              content={activeFile.node.content || "{}"}
+              isEditable={activeFile.node.isEditable ?? false}
+              onContentChange={(content) => onContentChange(activeFile.path, content)}
+              requirementsTxt={requirementsTxt}
+            />
+          ) : activeFile.node.name.endsWith(".md") ? (
+            // Markdown
             <div className="h-full overflow-auto p-6 prose prose-invert prose-sm max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {activeFile.node.content || ""}
               </ReactMarkdown>
             </div>
           ) : (
+            // Other files - Monaco editor
             <Editor
               height="100%"
               key={activeFile.path}

@@ -3,7 +3,7 @@ import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import execute
+from routers import execute, notebook
 
 # Windows requires ProactorEventLoop for subprocess support
 if sys.platform == "win32":
@@ -23,6 +23,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(execute.router, prefix="/api/projects", tags=["execution"])
+app.include_router(notebook.router, prefix="/api/notebook", tags=["notebook"])
 
 
 @app.get("/")

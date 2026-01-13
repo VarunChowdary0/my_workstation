@@ -27,7 +27,10 @@ interface TabsBarProps {
   const getFileIcon = (name: string) => {
     const ext = name.split(".").pop()?.toLowerCase() || "";
     switch (ext) {
-      case "json": return <div className=" text-xs text-center font-semibold text-yellow-400 select-none">{"{ }"}</div>; 
+      case "ipynb": return <div className="text-xs text-center font-bold text-orange-400 select-none">Jy</div>;
+      case "csv": return <div className="text-xs text-center font-semibold text-green-400 select-none">csv</div>;
+      case "md": return <div className="text-xs text-center font-bold text-blue-300 select-none">M↓</div>;
+      case "json": return <div className=" text-xs text-center font-semibold text-yellow-400 select-none">{"{ }"}</div>;
       case "m": return <MatLabIcon/>; 
       case "f90": return <FortranIcon/>; 
       case "css": return <TechStackIcon name="css3"/>; 

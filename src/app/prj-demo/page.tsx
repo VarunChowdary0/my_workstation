@@ -5,7 +5,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { MOCK_PROJECT_REACT } from "@/mock-data/projectFiles";
 import {
@@ -55,6 +55,23 @@ export default function ProjectDemo() {
   const [draggedExplorerFile, setDraggedExplorerFile] = useState<EditorFile | null>(null);
   const [showDropOverlay, setShowDropOverlay] = useState(false);
   const [draggingTabPath, setDraggingTabPath] = useState<string | null>(null);
+
+  // Find requirements.txt content for notebook package installation
+  const requirementsTxt = useMemo(() => {
+    const findRequirements = (files: FileNode[]): string | undefined => {
+      for (const file of files) {
+        if (file.name === 'requirements.txt' && file.content) {
+          return file.content;
+        }
+        if (file.children) {
+          const found = findRequirements(file.children);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    return findRequirements(projectFiles);
+  }, [projectFiles]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -268,6 +285,7 @@ export default function ProjectDemo() {
                           onDragStart={setDraggingTabPath}
                           onDragEnd={() => setDraggingTabPath(null)}
                           onContentChange={handleContentChange}
+                          requirementsTxt={requirementsTxt}
                         />
                         {dragSourcePanel === "right" && (
                           <div
@@ -303,6 +321,7 @@ export default function ProjectDemo() {
                               onDragStart={setDraggingTabPath}
                               onDragEnd={() => setDraggingTabPath(null)}
                               onContentChange={handleContentChange}
+                              requirementsTxt={requirementsTxt}
                             />
                             {dragSourcePanel === "left" && (
                               <div
