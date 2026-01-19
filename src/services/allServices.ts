@@ -66,11 +66,23 @@ export const allServices  = {
 
     // Notebook execution APIs
     notebook: {
-        createSession: async (requirementsTxt?: string): Promise<{ session_id: string; message: string }> => {
+        createSession: async (
+            files?: FileNode[],
+            requirementsTxt?: string
+        ): Promise<{ session_id: string; message: string }> => {
             const response = await axios.post(`${EXEC_API_BASE}/notebook/sessions`, {
+                files: files,
                 requirements_txt: requirementsTxt
             });
             return response.data;
+        },
+
+        updateFile: async (sessionId: string, filePath: string, content: string): Promise<void> => {
+            await axios.post(`${EXEC_API_BASE}/notebook/update-file`, {
+                session_id: sessionId,
+                file_path: filePath,
+                content: content
+            });
         },
 
         executeCell: async (
@@ -105,6 +117,7 @@ export const allServices  = {
             created_at: string;
             last_activity: string;
             is_alive: boolean;
+            has_project: boolean;
         }> => {
             const response = await axios.get(`${EXEC_API_BASE}/notebook/sessions/${sessionId}`);
             return response.data;
@@ -117,6 +130,7 @@ export const allServices  = {
                 created_at: string;
                 last_activity: string;
                 is_alive: boolean;
+                has_project: boolean;
             }>;
         }> => {
             const response = await axios.get(`${EXEC_API_BASE}/notebook/sessions`);

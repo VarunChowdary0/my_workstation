@@ -26,7 +26,7 @@ import {
   CopyIcon,
   EraserIcon,
 } from "lucide-react";
-import { NotebookContent, NotebookCell, NotebookOutput } from "@/types/types";
+import { NotebookContent, NotebookCell, NotebookOutput, FileNode } from "@/types/types";
 import { allServices } from "@/services/allServices";
 import {
   DropdownMenu,
@@ -39,7 +39,9 @@ interface NotebookEditorProps {
   content: string;
   isEditable: boolean;
   onContentChange?: (content: string) => void;
+  projectFiles?: FileNode[];  // Project files for imports and datasets
   requirementsTxt?: string;  // Contents of requirements.txt to install packages on kernel start
+  onSessionReady?: (sessionId: string) => void;  // Callback when kernel session is ready
 }
 
 type KernelStatus = "disconnected" | "connecting" | "idle" | "busy" | "error";
@@ -630,7 +632,9 @@ export default function NotebookEditor({
   content,
   isEditable,
   onContentChange,
+  projectFiles,
   requirementsTxt,
+  onSessionReady,
 }: NotebookEditorProps) {
   const [selectedCell, setSelectedCell] = useState<number>(0);
   const [kernelStatus, setKernelStatus] = useState<KernelStatus>("disconnected");
@@ -643,19 +647,52 @@ export default function NotebookEditor({
   const notebookRef = useRef(notebook);
   notebookRef.current = notebook;
 
-  // Connect to kernel on mount
+  // Store refs to avoid recreating session on every render
+  const projectFilesRef = useRef(projectFiles);
+  const requirementsTxtRef = useRef(requirementsTxt);
+  const sessionIdRef = useRef<string | null>(null);
+
+  // Update refs when props change (but don't trigger re-connection)
   useEffect(() => {
+    projectFilesRef.current = projectFiles;
+    requirementsTxtRef.current = requirementsTxt;
+  }, [projectFiles, requirementsTxt]);
+
+  // Connect to kernel on mount only (empty dependency array)
+  useEffect(() => {
+    let isMounted = true;
+    let createdSessionId: string | null = null;
+
     const connectKernel = async () => {
       setKernelStatus("connecting");
       try {
-        // Pass requirements.txt to install packages on kernel start
-        const response = await allServices.notebook.createSession(requirementsTxt);
+        // Pass project files and requirements.txt to create session with full context
+        const response = await allServices.notebook.createSession(
+          projectFilesRef.current,
+          requirementsTxtRef.current
+        );
+
+        if (!isMounted) {
+          // Component unmounted during connection - clean up the session
+          allServices.notebook.deleteSession(response.session_id).catch(console.error);
+          return;
+        }
+
+        createdSessionId = response.session_id;
+        sessionIdRef.current = response.session_id;
         setSessionId(response.session_id);
         setKernelStatus("idle");
-        console.log(`[Notebook] Connected to kernel: ${response.session_id}${requirementsTxt ? ' (with packages)' : ''}`);
+        console.log(`[Notebook] Connected to kernel: ${response.session_id}${projectFilesRef.current ? ' (with project files)' : ''}${requirementsTxtRef.current ? ' (with packages)' : ''}`);
+
+        // Notify parent that session is ready
+        if (onSessionReady) {
+          onSessionReady(response.session_id);
+        }
       } catch (error) {
-        console.error("[Notebook] Failed to connect to kernel:", error);
-        setKernelStatus("error");
+        if (isMounted) {
+          console.error("[Notebook] Failed to connect to kernel:", error);
+          setKernelStatus("error");
+        }
       }
     };
 
@@ -663,11 +700,13 @@ export default function NotebookEditor({
 
     // Cleanup on unmount
     return () => {
-      if (sessionId) {
-        allServices.notebook.deleteSession(sessionId).catch(console.error);
+      isMounted = false;
+      const sessionToDelete = createdSessionId || sessionIdRef.current;
+      if (sessionToDelete) {
+        allServices.notebook.deleteSession(sessionToDelete).catch(console.error);
       }
     };
-  }, [requirementsTxt]);
+  }, []); // Empty dependency array - only run on mount/unmount
 
   const updateNotebook = useCallback(
     (updater: (nb: NotebookContent) => NotebookContent) => {

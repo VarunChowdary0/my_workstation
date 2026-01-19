@@ -13,6 +13,8 @@ import {
   PlusIcon,
   TerminalSquareIcon,
   Trash2Icon,
+  FilePlus,
+  FolderPlus,
 } from "lucide-react";
 import FileTree from "@/components/editor/FileTree";
 import SideChat from "@/components/Ai/SideChat";
@@ -20,6 +22,7 @@ import EditorPanel from "@/components/editor/EditorPannel";
 import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/store/projectStore";
 import { FileNode } from "@/types/types";
+import { allServices } from "@/services/allServices";
 
 type EditorFile = { path: string; node: FileNode };
 
@@ -36,6 +39,10 @@ export default function ProjectDemo() {
     setOpenedFiles,
     addOpenedFile,
     removeOpenedFile,
+    createFile,
+    createFolder,
+    renameNode,
+    deleteNode,
   } = useProjectStore();
 
   // UI Visibility State
@@ -55,6 +62,13 @@ export default function ProjectDemo() {
   const [draggedExplorerFile, setDraggedExplorerFile] = useState<EditorFile | null>(null);
   const [showDropOverlay, setShowDropOverlay] = useState(false);
   const [draggingTabPath, setDraggingTabPath] = useState<string | null>(null);
+
+  // Notebook kernel session ID - used to sync file changes
+  const [notebookSessionId, setNotebookSessionId] = useState<string | null>(null);
+
+  // Root-level file/folder creation state
+  const [isCreatingRootFile, setIsCreatingRootFile] = useState(false);
+  const [isCreatingRootFolder, setIsCreatingRootFolder] = useState(false);
 
   // Find requirements.txt content for notebook package installation
   const requirementsTxt = useMemo(() => {
@@ -137,8 +151,8 @@ export default function ProjectDemo() {
 
     // 2. Update the local UI state for any open tabs of the same file
     const updateNodeInPlace = (files: EditorFile[]) => {
-      return files.map(file => 
-        file.path === path 
+      return files.map(file =>
+        file.path === path
           ? { ...file, node: { ...file.node, content: content } }
           : file
       );
@@ -152,6 +166,13 @@ export default function ProjectDemo() {
     }
     if (rightActive?.path === path) {
       setRightActive(prev => prev ? { ...prev, node: { ...prev.node, content } } : null);
+    }
+
+    // 4. Sync file changes to notebook kernel session (if active)
+    if (notebookSessionId && !path.endsWith('.ipynb')) {
+      // Don't sync the notebook file itself, only project files
+      allServices.notebook.updateFile(notebookSessionId, path, content)
+        .catch(err => console.warn('[Notebook] Failed to sync file to kernel:', err));
     }
   };
 
@@ -237,7 +258,27 @@ export default function ProjectDemo() {
               <div className="h-full border-r p-2 overflow-auto dark:bg-[#181818]">
                 <div className=" px-3 flex items-center justify-between">
                   <h2 className="font-normal mb-2 text-xs text-muted-foreground uppercase">FOLDERS: Demo</h2>
-                  <Badge className=" !text-xs" variant={'secondary'}>Ctrl + B</Badge>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setIsCreatingRootFile(true)}
+                      title="New File"
+                    >
+                      <FilePlus size={14} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setIsCreatingRootFolder(true)}
+                      title="New Folder"
+                    >
+                      <FolderPlus size={14} />
+                    </Button>
+                    <Badge className=" !text-xs" variant={'secondary'}>Ctrl + B</Badge>
+                  </div>
                 </div>
                 <FileTree
                   nodes={projectFiles}
@@ -250,6 +291,14 @@ export default function ProjectDemo() {
                     setDraggedExplorerFile(null);
                     setShowDropOverlay(false);
                   }}
+                  onCreateFile={createFile}
+                  onCreateFolder={createFolder}
+                  onRename={renameNode}
+                  onDelete={deleteNode}
+                  isCreatingRootFile={isCreatingRootFile}
+                  isCreatingRootFolder={isCreatingRootFolder}
+                  onRootFileCreated={() => setIsCreatingRootFile(false)}
+                  onRootFolderCreated={() => setIsCreatingRootFolder(false)}
                 />
               </div>
             </ResizablePanel>
@@ -285,7 +334,9 @@ export default function ProjectDemo() {
                           onDragStart={setDraggingTabPath}
                           onDragEnd={() => setDraggingTabPath(null)}
                           onContentChange={handleContentChange}
+                          projectFiles={projectFiles}
                           requirementsTxt={requirementsTxt}
+                          onNotebookSessionReady={setNotebookSessionId}
                         />
                         {dragSourcePanel === "right" && (
                           <div
@@ -321,7 +372,9 @@ export default function ProjectDemo() {
                               onDragStart={setDraggingTabPath}
                               onDragEnd={() => setDraggingTabPath(null)}
                               onContentChange={handleContentChange}
+                              projectFiles={projectFiles}
                               requirementsTxt={requirementsTxt}
+                              onNotebookSessionReady={setNotebookSessionId}
                             />
                             {dragSourcePanel === "left" && (
                               <div

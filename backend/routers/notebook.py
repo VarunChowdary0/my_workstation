@@ -17,6 +17,7 @@ from services.notebook_executor import (
     list_sessions,
     restart_kernel,
     shutdown_kernel,
+    update_session_file,
 )
 
 router = APIRouter()
@@ -24,7 +25,16 @@ router = APIRouter()
 
 # Request/Response Models
 
+class FileNode(BaseModel):
+    """Represents a file or directory in the project tree."""
+    name: str
+    content: str | None = None
+    isEditable: bool | None = True
+    children: list["FileNode"] | None = None
+
+
 class CreateSessionRequest(BaseModel):
+    files: list[FileNode] | None = None  # Project file tree for imports and datasets
     requirements_txt: str | None = None  # Contents of requirements.txt to install
 
 
@@ -51,6 +61,7 @@ class SessionInfoResponse(BaseModel):
     created_at: str
     last_activity: str
     is_alive: bool
+    has_project: bool = False  # Whether session has project files
 
 
 class SessionListResponse(BaseModel):
@@ -69,23 +80,61 @@ class InstallPackageResponse(BaseModel):
     output: str
 
 
+class UpdateFileRequest(BaseModel):
+    session_id: str
+    file_path: str  # Relative path like "utils/helpers.py"
+    content: str
+
+
 # Endpoints
 
 @router.post("/sessions", response_model=CreateSessionResponse)
 async def create_session(request: CreateSessionRequest | None = None):
     """
-    Create a new kernel session.
+    Create a new kernel session with optional project context.
 
-    Optionally accepts requirements.txt content to install packages automatically.
+    Args:
+        files: Optional file tree to write to the session's project directory.
+               This allows the notebook to import from project files and access datasets.
+               Example: [{"name": "utils", "children": [{"name": "helpers.py", "content": "def foo(): ..."}]}]
+        requirements_txt: Optional contents of requirements.txt to install packages.
+
+    The kernel will run with the project directory as its working directory,
+    and the directory will be added to sys.path for imports.
     """
     try:
-        requirements = request.requirements_txt if request else None
-        session = await create_kernel_session(requirements_txt=requirements)
+        # Convert Pydantic models to dicts if files provided
+        files_data = None
+        requirements = None
+
+        if request:
+            requirements = request.requirements_txt
+            if request.files:
+                files_data = [f.model_dump() for f in request.files]
+                print(f"[Notebook API] Received {len(request.files)} top-level files/folders")
+                for f in request.files:
+                    print(f"[Notebook API]   - {f.name} ({'dir' if f.children else 'file'})")
+            else:
+                print("[Notebook API] No files received in request")
+        else:
+            print("[Notebook API] Request is None")
+
+        session = await create_kernel_session(
+            files=files_data,
+            requirements_txt=requirements
+        )
+
+        message = "Kernel session created successfully"
+        if files_data:
+            message += f" with project context ({len(files_data)} items)"
+
         return CreateSessionResponse(
             session_id=session.session_id,
-            message="Kernel session created successfully"
+            message=message
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to create kernel: {str(e)}")
 
 
@@ -217,3 +266,27 @@ async def install_packages(request: InstallPackageRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Installation failed: {str(e)}")
+
+
+@router.post("/update-file")
+async def update_file(request: UpdateFileRequest):
+    """
+    Update a file in the session's project directory.
+
+    This allows modifying project files (datasets, modules, etc.) without
+    restarting the kernel. Note that Python module changes may require
+    reimporting (or using importlib.reload) to take effect.
+    """
+    success = await update_session_file(
+        session_id=request.session_id,
+        file_path=request.file_path,
+        content=request.content
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found or session has no project directory"
+        )
+
+    return {"success": True, "message": f"File {request.file_path} updated"}

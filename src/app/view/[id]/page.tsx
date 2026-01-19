@@ -12,6 +12,8 @@ import {
   PlusIcon,
   TerminalSquareIcon,
   Trash2Icon,
+  FilePlus,
+  FolderPlus,
 } from "lucide-react";
 import FileTree from "@/components/editor/FileTree";
 import SideChat from "@/components/Ai/SideChat";
@@ -47,6 +49,10 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
     removeOpenedFile,
     showCopilot,
     setShowCopilot,
+    createFile,
+    createFolder,
+    renameNode,
+    deleteNode,
   } = useProjectStore();
 
   // UI Visibility State
@@ -81,6 +87,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
   const [devServerPort, setDevServerPort] = useState<number | null>(null);
   const [showBrowserPreview, setShowBrowserPreview] = useState(false);
   const [browserPreviewFullscreen, setBrowserPreviewFullscreen] = useState(false);
+
+  // Notebook kernel session ID - used to sync file changes
+  const [notebookSessionId, setNotebookSessionId] = useState<string | null>(null);
+
+  // Root-level file/folder creation state
+  const [isCreatingRootFile, setIsCreatingRootFile] = useState(false);
+  const [isCreatingRootFolder, setIsCreatingRootFolder] = useState(false);
 
   // Find requirements.txt content for notebook package installation
   const requirementsTxt = useMemo(() => {
@@ -205,6 +218,13 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
           console.error("[LiveSync] Failed to update file:", err);
         });
       }, 300); // 300ms debounce
+    }
+
+    // 5. Sync file changes to notebook kernel session (if active)
+    if (notebookSessionId && !path.endsWith('.ipynb')) {
+      // Don't sync the notebook file itself, only project files
+      allServices.notebook.updateFile(notebookSessionId, path, content)
+        .catch(err => console.warn('[Notebook] Failed to sync file to kernel:', err));
     }
   };
 
@@ -499,7 +519,27 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
               <div className="h-full border-r p-2 overflow-auto dark:bg-[#181818]">
                 <div className=" px-3 flex items-center justify-between">
                   <h2 className="font-normal mb-2 text-xs text-muted-foreground uppercase">FOLDERS: Demo</h2>
-                  <Badge className=" !text-xs" variant={'secondary'}>Ctrl + B</Badge>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setIsCreatingRootFile(true)}
+                      title="New File"
+                    >
+                      <FilePlus size={14} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setIsCreatingRootFolder(true)}
+                      title="New Folder"
+                    >
+                      <FolderPlus size={14} />
+                    </Button>
+                    <Badge className=" !text-xs" variant={'secondary'}>Ctrl + B</Badge>
+                  </div>
                 </div>
                 <FileTree
                   nodes={projectFiles}
@@ -512,6 +552,14 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                     setDraggedExplorerFile(null);
                     setShowDropOverlay(false);
                   }}
+                  onCreateFile={createFile}
+                  onCreateFolder={createFolder}
+                  onRename={renameNode}
+                  onDelete={deleteNode}
+                  isCreatingRootFile={isCreatingRootFile}
+                  isCreatingRootFolder={isCreatingRootFolder}
+                  onRootFileCreated={() => setIsCreatingRootFile(false)}
+                  onRootFolderCreated={() => setIsCreatingRootFolder(false)}
                 />
               </div>
             </ResizablePanel>
@@ -547,7 +595,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                           onDragStart={setDraggingTabPath}
                           onDragEnd={() => setDraggingTabPath(null)}
                           onContentChange={handleContentChange}
+                          projectFiles={projectFiles}
                           requirementsTxt={requirementsTxt}
+                          onNotebookSessionReady={setNotebookSessionId}
                         />
                         {dragSourcePanel === "right" && (
                           <div
@@ -583,7 +633,9 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                               onDragStart={setDraggingTabPath}
                               onDragEnd={() => setDraggingTabPath(null)}
                               onContentChange={handleContentChange}
+                              projectFiles={projectFiles}
                               requirementsTxt={requirementsTxt}
+                              onNotebookSessionReady={setNotebookSessionId}
                             />
                             {dragSourcePanel === "left" && (
                               <div

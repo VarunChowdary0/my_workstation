@@ -73,16 +73,8 @@ const sampleNotebook: NotebookContent = {
     {
       cell_type: "code",
       source: [
-        "# CSV data (in a real project, this would be read from data/sample.csv)\n",
-        "csv_data = '''name,age,score,city\n",
-        "Alice,25,92,NYC\n",
-        "Bob,30,71,LA\n",
-        "Charlie,35,88,Chicago\n",
-        "Diana,28,65,Houston\n",
-        "Eve,32,79,Phoenix'''\n",
-        "\n",
-        "# Load data using read_csv\n",
-        "df = pd.read_csv(StringIO(csv_data))\n",
+        "# Load data from project's data folder\n",
+        "df = pd.read_csv('data/sample.csv')\n",
         "df"
       ],
       metadata: {},
@@ -149,6 +141,43 @@ const sampleNotebook: NotebookContent = {
           ]
         }
       ]
+    },
+    {
+      cell_type: "markdown",
+      source: [
+        "## Using Project Utility Functions\n",
+        "\n",
+        "We can import functions from other Python files in the project. Let's use `utils.py`:"
+      ],
+      metadata: {}
+    },
+    {
+      cell_type: "code",
+      source: [
+        "# Import functions from the project's utils.py\n",
+        "from utils import get_top_performers, calculate_stats, summarize_by_city\n",
+        "\n",
+        "# Get top 3 performers\n",
+        "top_3 = get_top_performers(df, 'score', n=3)\n",
+        "print(\"Top 3 Performers:\")\n",
+        "top_3"
+      ],
+      metadata: {},
+      execution_count: null,
+      outputs: []
+    },
+    {
+      cell_type: "code",
+      source: [
+        "# Get statistics for the score column using our utility function\n",
+        "score_stats = calculate_stats(df, 'score')\n",
+        "print(\"Score Statistics:\")\n",
+        "for key, value in score_stats.items():\n",
+        "    print(f\"  {key}: {value:.2f}\")"
+      ],
+      metadata: {},
+      execution_count: null,
+      outputs: []
     },
     {
       cell_type: "markdown",
@@ -321,6 +350,18 @@ def calculate_stats(df: pd.DataFrame, column: str) -> dict:
         'min': df[column].min(),
         'max': df[column].max()
     }
+
+def get_top_performers(df: pd.DataFrame, score_col: str = 'score', n: int = 3) -> pd.DataFrame:
+    """Get the top N performers sorted by score."""
+    return df.nlargest(n, score_col)
+
+def summarize_by_city(df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize data by city with count, avg age, and avg score."""
+    return df.groupby('city').agg({
+        'name': 'count',
+        'age': 'mean',
+        'score': 'mean'
+    }).rename(columns={'name': 'count'}).round(1)
 `,
     isEditable: true
   }

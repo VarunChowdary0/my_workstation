@@ -20,8 +20,12 @@ interface EditorPanelProps {
   onDragEnd: () => void;
   // *** NEW: Add prop to notify parent of content changes ***
   onContentChange: (path: string, content: string) => void;
+  // Project files for notebook imports and datasets
+  projectFiles?: FileNode[];
   // requirements.txt content for notebook package installation
   requirementsTxt?: string;
+  // Callback when notebook kernel session is ready
+  onNotebookSessionReady?: (sessionId: string) => void;
 }
 
 const getFileLanguage = (name: string) => {
@@ -68,7 +72,9 @@ export default function EditorPanel({
   onDragStart,
   onDragEnd,
   onContentChange,
+  projectFiles,
   requirementsTxt,
+  onNotebookSessionReady,
 }: EditorPanelProps) {
   return (
     <div className="flex flex-col h-full w-full">
@@ -92,7 +98,9 @@ export default function EditorPanel({
               content={activeFile.node.content || "{}"}
               isEditable={activeFile.node.isEditable ?? false}
               onContentChange={(content) => onContentChange(activeFile.path, content)}
+              projectFiles={projectFiles}
               requirementsTxt={requirementsTxt}
+              onSessionReady={onNotebookSessionReady}
             />
           ) : activeFile.node.name.endsWith(".md") ? (
             // Markdown
