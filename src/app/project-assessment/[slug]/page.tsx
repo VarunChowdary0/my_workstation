@@ -453,6 +453,8 @@ function AssessmentIDE() {
   const streamOutput = async (sid: string, signal: AbortSignal) => {
     try {
       const streamResponse = await fetch(`http://localhost:8001/api/projects/stream/${sid}`, {
+//     const streamResponse = await fetch(`/workstation-api/projects/stream/${sid}`, {
+
         signal,
         headers: { Accept: "text/event-stream", "Cache-Control": "no-cache" },
       });
@@ -751,7 +753,7 @@ function AssessmentIDE() {
                         <>
                           <ResizableHandle withHandle />
                           <ResizablePanel defaultSize={40} minSize={20}>
-                            <BrowserPreview url={`http://localhost:${devServerPort}`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
+                            <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
                           </ResizablePanel>
                         </>
                       )}
@@ -826,7 +828,7 @@ function AssessmentIDE() {
       {/* Fullscreen Browser Preview */}
       {showBrowserPreview && browserPreviewFullscreen && devServerPort && (
         <div className="fixed inset-0 z-50 bg-black">
-          <BrowserPreview url={`http://localhost:${devServerPort}`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
+          <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
         </div>
       )}
 

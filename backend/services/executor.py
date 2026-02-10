@@ -22,13 +22,20 @@ class ProjectType(Enum):
     UNKNOWN = "unknown"
 
 
+PORT_RANGE_START = 10000
+PORT_RANGE_END = 10050
+
+
 def get_free_port() -> int:
-    """Find a free port on the system."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('', 0))
-        s.listen(1)
-        port = s.getsockname()[1]
-    return port
+    """Find a free port in the 10000-10050 range (exposed through nginx)."""
+    for port in range(PORT_RANGE_START, PORT_RANGE_END + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('', port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"No free port in range {PORT_RANGE_START}-{PORT_RANGE_END}")
 
 
 @dataclass
@@ -135,9 +142,9 @@ def get_run_commands(project_type: ProjectType, port: int, use_nodemon: bool = F
     nodejs_run = f"set PORT={port} && npx nodemon server.js" if use_nodemon else f"set PORT={port} && npm start"
 
     commands = {
-        ProjectType.NEXTJS: ("npm install", f"npm run dev -- -p {port}"),
+        ProjectType.NEXTJS: ("npm install", f"npm run dev -- -H 0.0.0.0 -p {port}"),
         ProjectType.REACT_CRA: ("npm install", f"set PORT={port} && npm start"),
-        ProjectType.VITE: ("npm install", f"npm run dev -- --port {port}"),
+        ProjectType.VITE: ("npm install", f"npm run dev -- --host 0.0.0.0 --port {port}"),
         ProjectType.NODEJS: ("npm install", nodejs_run),
         ProjectType.PYTHON: (None, "python main.py"),
     }

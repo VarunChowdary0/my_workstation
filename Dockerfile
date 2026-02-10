@@ -28,6 +28,12 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Build args for NEXT_PUBLIC env vars (baked at build time)
+ARG NEXT_PUBLIC_API_BASE=/api
+ARG NEXT_PUBLIC_EXEC_API_BASE=/workstation-api
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_EXEC_API_BASE=$NEXT_PUBLIC_EXEC_API_BASE
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
