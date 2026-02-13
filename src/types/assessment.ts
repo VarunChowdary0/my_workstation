@@ -65,3 +65,69 @@ export type AssessmentStatus =
   | 'expired'
   | 'already_submitted'
   | 'error';
+
+// --- Evaluation API Types ---
+
+export interface EvaluationSubmission {
+  id: string;
+  files: FileNode[];
+  submitted_at: string;
+  sync_count: number;
+}
+
+export interface FeedbackCategories {
+  [key: string]: number;
+}
+
+export interface ExistingEvaluation {
+  score: number;
+  report: string;
+  feedback_categories: FeedbackCategories;
+  evaluated_by: string;
+  evaluated_at: string;
+}
+
+export interface EvaluateSecureResponse {
+  secure_token: string;
+  expires_in_seconds: number;
+  candidate: AssessmentCandidate;
+  round: {
+    id: string;
+    name: string | null;
+    type: string;
+  };
+  project: {
+    id: string;
+    files: FileNode[];
+    metadata: {
+      name?: string;
+      description?: string;
+      language?: string;
+      framework?: string;
+      runtime?: string;
+      version?: string;
+      entrypoint?: string;
+      scripts?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    };
+  };
+  submission: EvaluationSubmission;
+  existing_evaluation: ExistingEvaluation | null;
+}
+
+export interface SubmitReviewResponse {
+  message: string;
+  score: number;
+  evaluated_at: string;
+  evaluated_by: string;
+}
+
+export type EvaluationStatus =
+  | 'loading'
+  | 'ready'
+  | 'expired'
+  | 'error'
+  | 'not_found'
+  | 'forbidden'
+  | 'submitting'
+  | 'submitted';
