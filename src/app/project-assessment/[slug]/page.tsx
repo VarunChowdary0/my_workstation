@@ -753,7 +753,8 @@ function AssessmentIDE() {
                         <>
                           <ResizableHandle withHandle />
                           <ResizablePanel defaultSize={40} minSize={20}>
-                            <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
+                            {/* <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} /> */}
+                            <BrowserPreview url={`http://localhost:${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
                           </ResizablePanel>
                         </>
                       )}
@@ -828,7 +829,8 @@ function AssessmentIDE() {
       {/* Fullscreen Browser Preview */}
       {showBrowserPreview && browserPreviewFullscreen && devServerPort && (
         <div className="fixed inset-0 z-50 bg-black">
-          <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
+          {/* <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} /> */}
+          <BrowserPreview url={`http://localhost:${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
         </div>
       )}
 
