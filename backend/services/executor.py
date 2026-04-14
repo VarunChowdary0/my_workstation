@@ -138,13 +138,27 @@ def get_run_commands(project_type: ProjectType, port: int, use_nodemon: bool = F
     # Use environment variable PORT for most frameworks
     # React CRA uses PORT env var, Next.js uses -p flag, Vite uses --port flag
 
-    # For Node.js, use nodemon for hot reload if requested
-    nodejs_run = f"set PORT={port} && npx nodemon server.js" if use_nodemon else f"set PORT={port} && npm start"
+    # POSIX env-prefix form so PORT is actually passed to the child process.
+    nodejs_run = (
+        f"PORT={port} npx nodemon server.js" if use_nodemon else f"PORT={port} npm start"
+    )
+
+    # Asset base path so dev-server-emitted absolute URLs route through the
+    # /preview/<port>/ nginx proxy on candidate.apexhire.ai.
+    base_prefix = f"/preview/{port}"
+
+    cra_env = (
+        f"PORT={port} HOST=0.0.0.0 BROWSER=none "
+        f"PUBLIC_URL={base_prefix} WDS_SOCKET_PORT=0"
+    )
 
     commands = {
         ProjectType.NEXTJS: ("npm install", f"npm run dev -- -H 0.0.0.0 -p {port}"),
-        ProjectType.REACT_CRA: ("npm install", f"set PORT={port} && npm start"),
-        ProjectType.VITE: ("npm install", f"npm run dev -- --host 0.0.0.0 --port {port}"),
+        ProjectType.REACT_CRA: ("npm install", f"{cra_env} npm start"),
+        ProjectType.VITE: (
+            "npm install",
+            f"npm run dev -- --host 0.0.0.0 --port {port} --base {base_prefix}/",
+        ),
         ProjectType.NODEJS: ("npm install", nodejs_run),
         ProjectType.PYTHON: (None, "python main.py"),
     }
@@ -411,7 +425,7 @@ async def execute_project(session: ExecutionSession) -> None:
                     break
 
         # Update run command with correct entry file
-        run_cmd = f"set PORT={session.port} && npx nodemon {main_js_file}"
+        run_cmd = f"PORT={session.port} npx nodemon {main_js_file}"
         await session.output_queue.put(f"⚙ Using nodemon for hot reload (entry: {main_js_file})\n\n")
 
     # Run install command if needed
@@ -483,10 +497,10 @@ async def execute_project(session: ExecutionSession) -> None:
             elif is_flask:
                 # Use flask run for Flask projects
                 module_name = main_file.replace(".py", "")
-                run_cmd = f"set FLASK_APP={main_file} && set FLASK_DEBUG=1 && flask run --host=0.0.0.0 --port={session.port}"
+                run_cmd = f"FLASK_APP={main_file} FLASK_DEBUG=1 flask run --host=0.0.0.0 --port={session.port}"
             else:
                 # Regular Python script with PORT env var
-                run_cmd = f"set PORT={session.port} && python {main_file}"
+                run_cmd = f"PORT={session.port} python {main_file}"
 
     # Run the project (this one signals end)
     await run_command(session, run_cmd, signal_end=True)

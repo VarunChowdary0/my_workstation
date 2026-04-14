@@ -424,30 +424,31 @@ function NotebookCellComponent({
               onDoubleClick={handleDoubleClick}
             >
               {isEditing ? (
-                <Editor
-                  height={`${Math.max(80, source.split("\n").length * 20 + 16)}px`}
-                  defaultLanguage="markdown"
-                  value={source}
-                  onChange={(val) => val !== undefined && onSourceChange(val)}
-                  onBlur={handleBlur}
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: false },
-                    lineNumbers: "off",
-                    glyphMargin: false,
-                    folding: false,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 0,
-                    scrollBeyondLastLine: false,
-                    renderLineHighlight: "none",
-                    wordWrap: "on",
-                    scrollbar: {
-                      vertical: "hidden",
-                      horizontal: "hidden",
-                    },
-                    padding: { top: 8, bottom: 8 },
-                  }}
-                />
+                <div onBlur={handleBlur}>
+                  <Editor
+                    height={`${Math.max(80, source.split("\n").length * 20 + 16)}px`}
+                    defaultLanguage="markdown"
+                    value={source}
+                    onChange={(val) => val !== undefined && onSourceChange(val)}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
+                      lineNumbers: "off",
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 0,
+                      scrollBeyondLastLine: false,
+                      renderLineHighlight: "none",
+                      wordWrap: "on",
+                      scrollbar: {
+                        vertical: "hidden",
+                        horizontal: "hidden",
+                      },
+                      padding: { top: 8, bottom: 8 },
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="prose prose-invert prose-sm max-w-none p-2">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>
@@ -468,7 +469,7 @@ function NotebookCellComponent({
 
 // Kernel status indicator component
 function KernelStatusIndicator({ status }: { status: KernelStatus }) {
-  const statusConfig = {
+  const statusConfig: Record<KernelStatus, { icon: typeof CircleIcon; color: string; label: string; animate?: boolean }> = {
     disconnected: { icon: CircleIcon, color: "text-gray-500", label: "Disconnected" },
     connecting: { icon: Loader2Icon, color: "text-yellow-500", label: "Connecting...", animate: true },
     idle: { icon: CheckCircleIcon, color: "text-green-500", label: "Idle" },

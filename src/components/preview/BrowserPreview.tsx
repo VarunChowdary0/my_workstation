@@ -23,11 +23,12 @@ export default function BrowserPreview({
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Extract base URL (protocol + host + port)
+  // Extract base URL (protocol + host + port + any prefix path, e.g. /preview/10000)
   const baseUrl = (() => {
     try {
       const parsed = new URL(url);
-      return `${parsed.protocol}//${parsed.host}`;
+      const prefix = parsed.pathname.replace(/\/+$/, "");
+      return `${parsed.protocol}//${parsed.host}${prefix}`;
     } catch {
       return url;
     }
@@ -86,9 +87,9 @@ export default function BrowserPreview({
             className="flex-1 min-w-0 flex items-center bg-[#3c3c3c] rounded text-xs overflow-hidden cursor-text"
             onClick={() => setIsEditing(true)}
           >
-            {/* Fixed base URL part */}
-            <span className="px-2 py-1 text-gray-500 shrink-0 select-none">
-              {baseUrl}
+            {/* Fixed base URL part (hidden — internal proxy path is an implementation detail) */}
+            <span className="pl-2 py-1 text-gray-500 shrink-0 select-none" title={baseUrl}>
+              preview
             </span>
             {/* Editable path part */}
             {isEditing ? (

@@ -1,4 +1,5 @@
 "use client";
+import { getPreviewUrl } from "@/utils/previewUrl";
 
 import {
   ResizableHandle,
@@ -299,7 +300,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
       console.log(`[Stream] Connecting to session ${sid}...`);
 
       const streamResponse = await fetch(
-        `http://localhost:8001/api/projects/stream/${sid}`,
+        `/workstation-api/projects/stream/${sid}`,
         {
           signal,
           headers: {
@@ -365,7 +366,11 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
               lowerData.includes("uvicorn running on") ||
               lowerData.includes("application startup complete") ||
               // Flask indicators
-              (lowerData.includes("running on") && lowerData.includes("http://"))
+              (lowerData.includes("running on") && lowerData.includes("http://")) ||
+              lowerData.includes("server is running") ||
+              lowerData.includes("server running") ||
+              lowerData.includes("listening on") ||
+              lowerData.includes("app listening")
             ) {
               setShowBrowserPreview(true);
             }
@@ -683,7 +688,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
                         <ResizableHandle withHandle />
                         <ResizablePanel defaultSize={40} minSize={20}>
                           <BrowserPreview
-                            url={`http://localhost:${devServerPort}`}
+                            url={getPreviewUrl(devServerPort)}
                             onClose={handleCloseBrowserPreview}
                             onToggleFullscreen={handleToggleBrowserFullscreen}
                             isFullscreen={false}
@@ -774,7 +779,7 @@ const ProjectView: React.FC<ProjectViewProps> = ({ FILES, framework, entrypoint 
       {showBrowserPreview && browserPreviewFullscreen && devServerPort && (
         <div className="fixed inset-0 z-50 bg-black">
           <BrowserPreview
-            url={`http://localhost:${devServerPort}`}
+            url={getPreviewUrl(devServerPort)}
             onClose={handleCloseBrowserPreview}
             onToggleFullscreen={handleToggleBrowserFullscreen}
             isFullscreen={true}

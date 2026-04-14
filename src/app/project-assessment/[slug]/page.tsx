@@ -1,4 +1,5 @@
 "use client";
+import { getPreviewUrl } from "@/utils/previewUrl";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { usePathname } from "next/navigation";
@@ -452,8 +453,7 @@ function AssessmentIDE() {
   // -------------------------------------------------------------------------
   const streamOutput = async (sid: string, signal: AbortSignal) => {
     try {
-      const streamResponse = await fetch(`http://localhost:8001/api/projects/stream/${sid}`, {
-//     const streamResponse = await fetch(`/workstation-api/projects/stream/${sid}`, {
+      const streamResponse = await fetch(`/workstation-api/projects/stream/${sid}`, {
 
         signal,
         headers: { Accept: "text/event-stream", "Cache-Control": "no-cache" },
@@ -485,7 +485,11 @@ function AssessmentIDE() {
               lowerData.includes("\u279c  local:") ||
               lowerData.includes("uvicorn running on") ||
               lowerData.includes("application startup complete") ||
-              (lowerData.includes("running on") && lowerData.includes("http://"))
+              (lowerData.includes("running on") && lowerData.includes("http://")) ||
+              lowerData.includes("server is running") ||
+              lowerData.includes("server running") ||
+              lowerData.includes("listening on") ||
+              lowerData.includes("app listening")
             ) { setShowBrowserPreview(true); }
           }
         }
@@ -754,7 +758,7 @@ function AssessmentIDE() {
                           <ResizableHandle withHandle />
                           <ResizablePanel defaultSize={40} minSize={20}>
                             {/* <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} /> */}
-                            <BrowserPreview url={`http://localhost:${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
+                            <BrowserPreview url={getPreviewUrl(devServerPort)} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={false} />
                           </ResizablePanel>
                         </>
                       )}
@@ -830,7 +834,7 @@ function AssessmentIDE() {
       {showBrowserPreview && browserPreviewFullscreen && devServerPort && (
         <div className="fixed inset-0 z-50 bg-black">
           {/* <BrowserPreview url={`/dev-preview/${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} /> */}
-          <BrowserPreview url={`http://localhost:${devServerPort}/`} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
+          <BrowserPreview url={getPreviewUrl(devServerPort)} onClose={handleCloseBrowserPreview} onToggleFullscreen={handleToggleBrowserFullscreen} isFullscreen={true} />
         </div>
       )}
 
